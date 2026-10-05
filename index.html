@@ -750,6 +750,34 @@
             });
         }
 
+        // Calcula distância entre dois pontos usando fórmula de Haversine (retorna km)
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Raio da Terra em km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // Formata distância para exibição amigável
+        function formatDistance(km) {
+            if (km < 1) return `${Math.round(km * 1000)} m`;
+            if (km < 10) return `${km.toFixed(1)} km`;
+            return `${Math.round(km)} km`;
+        }
+
+        // Gera viewbox ao redor de um ponto central (raio em graus ~0.5° ≈ 55km)
+        function buildViewbox(lat, lon, radiusDeg) {
+            const lon1 = (lon - radiusDeg).toFixed(6);
+            const lat1 = (lat - radiusDeg).toFixed(6);
+            const lon2 = (lon + radiusDeg).toFixed(6);
+            const lat2 = (lat + radiusDeg).toFixed(6);
+            return `${lon1},${lat2},${lon2},${lat1}`;
+        }
+
         function setupInput(inputId, dropdownId) {
             const input = document.getElementById(inputId);
             const dropdown = document.getElementById(dropdownId);
@@ -767,9 +795,33 @@
 
                 debounceTimer = setTimeout(async () => {
                     try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=br&limit=5&q=${encodeURIComponent(query)}`);
-                        const data = await res.json();
+                        // Monta URL base
+                        let url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=br&limit=8&q=${encodeURIComponent(query)}`;
+
+                        // Se temos a posição GPS do motorista, adiciona viewbox para
+                        // priorizar resultados próximos (~55km de raio)
+                        const refPos = driverPosition || locationData.origin;
+                        if (refPos) {
+                            const vb = buildViewbox(refPos.lat, refPos.lng || refPos.lon, 0.5);
+                            url += `&viewbox=${vb}&bounded=0`;
+                        }
+
+                        const res = await fetch(url);
+                        let data = await res.json();
                         
+                        // Ordena resultados por proximidade ao motorista (mais perto primeiro)
+                        if (refPos && data.length > 0) {
+                            const refLat = refPos.lat;
+                            const refLon = refPos.lng || refPos.lon;
+                            data.forEach(item => {
+                                item._distance = haversineDistance(refLat, refLon, parseFloat(item.lat), parseFloat(item.lon));
+                            });
+                            data.sort((a, b) => a._distance - b._distance);
+                        }
+
+                        // Limita a 5 resultados após ordenação
+                        data = data.slice(0, 5);
+
                         dropdown.innerHTML = '';
                         if (data.length > 0) {
                             data.forEach(item => {
@@ -777,19 +829,34 @@
                                 div.className = 'autocomplete-item';
                                 
                                 const name = item.address.road || item.address.neighbourhood || item.address.suburb || item.name;
+                                const number = item.address.house_number ? `, ${item.address.house_number}` : '';
+                                const neighbourhood = item.address.neighbourhood || item.address.suburb || '';
                                 const city = item.address.city || item.address.town || item.address.village || item.address.municipality || '';
                                 const state = item.address.state || '';
-                                
+
+                                // Monta subtítulo com bairro + cidade
+                                let subParts = [];
+                                if (neighbourhood && neighbourhood !== name) subParts.push(neighbourhood);
+                                if (city) subParts.push(city);
+                                if (state) subParts.push(state);
+                                const subText = subParts.join(' - ');
+
+                                // Badge de distância se temos posição GPS
+                                const distBadge = (refPos && item._distance !== undefined) 
+                                    ? `<span class="ml-auto shrink-0 text-[10px] font-mono-numbers font-semibold text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded-md">${formatDistance(item._distance)}</span>`
+                                    : '';
+
                                 div.innerHTML = `
                                     <svg class="w-4 h-4 mt-0.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                                    <div>
-                                        <div class="autocomplete-item-main">${name}</div>
-                                        <div class="autocomplete-item-sub">${city} ${city && state ? '-' : ''} ${state}</div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="autocomplete-item-main">${name}${number}</div>
+                                        <div class="autocomplete-item-sub">${subText}</div>
                                     </div>
+                                    ${distBadge}
                                 `;
                                 
                                 div.addEventListener('click', () => {
-                                    input.value = name + (city ? `, ${city}` : '');
+                                    input.value = name + number + (city ? `, ${city}` : '');
                                     locationData[inputId] = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
                                     dropdown.classList.remove('active');
                                 });
@@ -802,7 +869,7 @@
                     } catch (e) {
                         console.error("Erro na busca de endereço", e);
                     }
-                }, 600); // 600ms debounce
+                }, 450); // 450ms debounce (mais responsivo)
             });
         }
 
