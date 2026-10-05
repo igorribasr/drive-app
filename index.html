@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora Motorista</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f4f6; }
+        #map { height: 350px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; border: 1px solid #d1d5db; }
+        .pac-container { border-radius: 0.5rem; margin-top: 2px; border: 1px solid #d1d5db; font-family: sans-serif; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    </style>
+    <!-- ATENÇÃO: Substitua SUA_API_KEY_AQUI pela chave de API do Google Maps -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AQ.Ab8RN6IGp7p7hE4nEqm9KS2wtsyaMmOuL-6hKy4NHFn3QpUPKQ&libraries=places&callback=initMap"></script>
+</head>
+<body class="flex flex-col items-center min-h-screen p-4 font-sans text-gray-800">
+
+    <div class="w-full max-w-md bg-white rounded-xl shadow-lg p-6 mt-4">
+        <h1 class="text-2xl font-bold text-center text-gray-900 mb-4">🚕 Calculadora Inteligente</h1>
+
+        <!-- Configurações de Preço (Ocultas por padrão) -->
+        <details class="mb-4 group">
+            <summary class="cursor-pointer text-sm font-semibold text-blue-600 hover:text-blue-800">
+                ⚙️ Configurar Preços Base
+            </summary>
+            <div class="mt-4 grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700">Valor Base (R$)</label>
+                    <input type="number" id="baseFare" value="3.50" step="0.10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700">Preço / Km (R$)</label>
+                    <input type="number" id="pricePerKm" value="1.50" step="0.10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700">Preço / Min (R$)</label>
+                    <input type="number" id="pricePerMin" value="0.25" step="0.05" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700">Valor Mínimo (R$)</label>
+                    <input type="number" id="minFare" value="7.00" step="0.50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+            </div>
+        </details>
+
+        <!-- Entradas da Corrida -->
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Local de Partida (Passageiro)</label>
+                <div class="flex mt-1">
+                    <input type="text" id="origin" placeholder="Ex: Rua das Flores, 123" class="block w-full rounded-l-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 border">
+                    <button onclick="useMyLocation()" class="bg-gray-200 text-gray-700 px-3 rounded-r-md border border-l-0 border-gray-300 hover:bg-gray-300" title="Usar onde estou agora">
+                        📍
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Destino</label>
+                <input type="text" id="destination" placeholder="Ex: Shopping Centro" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 border">
+            </div>
+
+            <button onclick="calculateRoute()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 mt-4 shadow-md">
+                Buscar Rota e Calcular Preço
+            </button>
+        </div>
+
+        <!-- Mapa -->
+        <div id="map" class="hidden"></div>
+
+        <!-- Resultado -->
+        <div id="resultContainer" class="mt-6 hidden">
+            <div class="bg-gray-100 p-3 rounded-t-lg flex justify-between text-sm text-gray-700 border-b">
+                <span>🛣️ Distância: <strong id="distanceInfo">-</strong></span>
+                <span>⏱️ Tempo: <strong id="timeInfo">-</strong></span>
+            </div>
+            <div class="bg-green-50 border-x-4 border-b-4 border-green-500 p-4 rounded-b-lg flex flex-col items-center">
+                <p class="text-sm text-green-700 font-medium mb-1">Valor Sugerido para o Passageiro</p>
+                <p id="totalFare" class="text-4xl font-bold text-green-800">R$ 0,00</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map, directionsService, directionsRenderer, driverMarker;
+        let driverPosition = null;
+
+        window.onload = function() {
+            const savedSettings = JSON.parse(localStorage.getItem('taxiSettings'));
+            if (savedSettings) {
+                document.getElementById('baseFare').value = savedSettings.baseFare;
+                document.getElementById('pricePerKm').value = savedSettings.pricePerKm;
+                document.getElementById('pricePerMin').value = savedSettings.pricePerMin;
+                document.getElementById('minFare').value = savedSettings.minFare;
+            }
+        };
+
+        function saveSettings(baseFare, pricePerKm, pricePerMin, minFare) {
+            localStorage.setItem('taxiSettings', JSON.stringify({ baseFare, pricePerKm, pricePerMin, minFare }));
+        }
+
+        // Função chamada pelo Google Maps ao carregar
+        function initMap() {
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 13,
+                center: { lat: -23.55052, lng: -46.633308 }, // SP por padrão
+                disableDefaultUI: true,
+                zoomControl: true
+            });
+            directionsRenderer.setMap(map);
+
+            // Adiciona autocomplete nos inputs
+            const originInput = document.getElementById("origin");
+            const destinationInput = document.getElementById("destination");
+            
+            const options = {
+                componentRestrictions: { country: "br" }
+            };
+
+            new google.maps.places.Autocomplete(originInput, options);
+            new google.maps.places.Autocomplete(destinationInput, options);
+
+            getDriverLocation();
+        }
+
+        function getDriverLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    driverPosition = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    };
+                    
+                    document.getElementById('map').classList.remove('hidden');
+                    map.setCenter(driverPosition);
+                    map.setZoom(15);
+                    
+                    if (driverMarker) driverMarker.setMap(null);
+                    
+                    driverMarker = new google.maps.Marker({
+                        position: driverPosition,
+                        map: map,
+                        title: "Você está aqui",
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 8,
+                            fillColor: "#4285F4",
+                            fillOpacity: 1,
+                            strokeColor: "white",
+                            strokeWeight: 2,
+                        }
+                    });
+                });
+            }
+        }
+
+        function useMyLocation() {
+            if (driverPosition) {
+                // Em vez de preencher com texto, vamos apenas mostrar o alerta, 
+                // pois o Google Places espera um endereço em texto. 
+                // Uma solução simples: setamos o valor como "Minha Localização Atual"
+                // e na hora de rotear passamos as coordenadas se o texto for esse.
+                document.getElementById("origin").value = "Minha Localização Atual";
+            } else {
+                alert("Sua localização ainda não foi detectada. Tente novamente.");
+                getDriverLocation();
+            }
+        }
+
+        function calculateRoute() {
+            let origin = document.getElementById("origin").value;
+            const destination = document.getElementById("destination").value;
+            
+            if (!origin || !destination) {
+                alert("Preencha partida e destino.");
+                return;
+            }
+
+            document.getElementById('map').classList.remove('hidden');
+
+            // Se o usuário clicou em usar localização atual
+            if (origin === "Minha Localização Atual" && driverPosition) {
+                origin = driverPosition;
+            }
+
+            const request = {
+                origin: origin,
+                destination: destination,
+                travelMode: 'DRIVING',
+                language: 'pt-BR'
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status == 'OK') {
+                    directionsRenderer.setDirections(result);
+                    
+                    const route = result.routes[0].legs[0];
+                    const distanceKm = route.distance.value / 1000;
+                    const timeMin = route.duration.value / 60;
+                    
+                    document.getElementById("distanceInfo").innerText = route.distance.text;
+                    document.getElementById("timeInfo").innerText = route.duration.text;
+                    
+                    calculateFare(distanceKm, timeMin);
+                } else {
+                    alert("Não foi possível calcular a rota. Verifique os endereços.");
+                }
+            });
+        }
+
+        function calculateFare(distance, time) {
+            const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
+            const pricePerKm = parseFloat(document.getElementById('pricePerKm').value) || 0;
+            const pricePerMin = parseFloat(document.getElementById('pricePerMin').value) || 0;
+            const minFare = parseFloat(document.getElementById('minFare').value) || 0;
+            
+            saveSettings(baseFare, pricePerKm, pricePerMin, minFare);
+
+            let total = baseFare + (distance * pricePerKm) + (time * pricePerMin);
+            
+            if (total < minFare) {
+                total = minFare;
+            }
+
+            document.getElementById('totalFare').innerText = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('resultContainer').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
