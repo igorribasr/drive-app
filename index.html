@@ -1,232 +1,724 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora Motorista</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Drive Pilot — Cockpit de Corridas</title>
+    
+    <!-- Meta tags PWA / Mobile Web App -->
+    <meta name="theme-color" content="#030712">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DrivePilot">
+
+    <!-- Fonts: Plus Jakarta Sans (UI) & JetBrains Mono (Numbers/Metrics) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        amber: {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        },
+                        night: {
+                            900: '#070b14',
+                            800: '#0f172a',
+                            700: '#1e293b',
+                            600: '#334155'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-        body { background-color: #f3f4f6; }
-        #map { height: 350px; width: 100%; border-radius: 0.5rem; margin-top: 1rem; border: 1px solid #d1d5db; }
-        .pac-container { border-radius: 0.5rem; margin-top: 2px; border: 1px solid #d1d5db; font-family: sans-serif; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #030712;
+            overscroll-behavior-y: none;
+        }
+        .font-mono-numbers {
+            font-family: 'JetBrains Mono', monospace;
+            font-feature-settings: "tnum" 1, "zero" 1;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            min-height: 220px;
+            background-color: #0b1120;
+        }
+        /* Custom Google Places Autocomplete dropdown dark styling */
+        .pac-container {
+            background-color: #0f172a !important;
+            border: 1px solid #334155 !important;
+            border-radius: 1rem !important;
+            margin-top: 6px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+            z-index: 9999 !important;
+        }
+        .pac-item {
+            border-top: 1px solid #1e293b !important;
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+            color: #94a3b8 !important;
+            cursor: pointer !important;
+        }
+        .pac-item:hover, .pac-item-selected {
+            background-color: #1e293b !important;
+        }
+        .pac-item-query {
+            font-size: 14px !important;
+            color: #f8fafc !important;
+            padding-right: 4px !important;
+        }
+        .pac-matched {
+            color: #fbbf24 !important;
+            font-weight: 700 !important;
+        }
+        .pac-icon {
+            filter: invert(0.8) hue-rotate(180deg) !important;
+        }
+
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Custom scrollbar for rate presets */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
     </style>
-    <!-- ATENÇÃO: Substitua SUA_API_KEY_AQUI pela chave de API do Google Maps -->
+    
+    <!-- Google Maps JS API -->
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AQ.Ab8RN6IGp7p7hE4nEqm9KS2wtsyaMmOuL-6hKy4NHFn3QpUPKQ&libraries=places&callback=initMap"></script>
 </head>
-<body class="flex flex-col items-center min-h-screen p-4 font-sans text-gray-800">
 
-    <div class="w-full max-w-md bg-white rounded-xl shadow-lg p-6 mt-4">
-        <h1 class="text-2xl font-bold text-center text-gray-900 mb-4">🚕 Calculadora Inteligente</h1>
+<body class="min-h-screen bg-slate-950 flex flex-col justify-between antialiased selection:bg-amber-400 selection:text-slate-950 pb-6">
 
-        <!-- Configurações de Preço (Ocultas por padrão) -->
-        <details class="mb-4 group">
-            <summary class="cursor-pointer text-sm font-semibold text-blue-600 hover:text-blue-800">
-                ⚙️ Configurar Preços Base
-            </summary>
-            <div class="mt-4 grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+    <!-- Top Status Header (HUD Style) -->
+    <header class="w-full max-w-lg mx-auto px-4 pt-3 pb-2 flex items-center justify-between sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-amber-500/20 text-base">
+                ⚡
+            </div>
+            <div>
+                <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                    DRIVE PILOT
+                    <span class="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        GPS ATIVO
+                    </span>
+                </h1>
+                <p class="text-[11px] font-medium text-slate-400" id="driverStatusSubtitle">Pronto para cotar corrida</p>
+            </div>
+        </div>
+
+        <!-- Gear / Settings Trigger Button -->
+        <button id="openConfigBtn" onclick="toggleConfigModal(true)" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 active:scale-95 transition-all text-xs font-semibold shadow-inner">
+            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            <span id="rateSummaryBadge">R$ 1,50/km</span>
+        </button>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="w-full max-w-lg mx-auto px-4 flex-1 flex flex-col gap-4 mt-2">
+
+        <!-- Input Dispatch Card -->
+        <div class="glass-panel rounded-2xl p-4 shadow-2xl relative overflow-hidden border border-slate-800/80">
+            <!-- Decorative Subtle Accent Line -->
+            <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"></div>
+
+            <div class="space-y-3">
+                
+                <!-- Origem -->
                 <div>
-                    <label class="block text-xs font-medium text-gray-700">Valor Base (R$)</label>
-                    <input type="number" id="baseFare" value="3.50" step="0.10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-500/20"></span>
+                            Ponto de Partida (Embarque)
+                        </label>
+                        <button type="button" onclick="useMyLocation()" class="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 py-0.5 px-2 rounded-lg bg-amber-400/10 active:bg-amber-400/20 transition-all">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            Onde estou agora
+                        </button>
+                    </div>
+                    <div class="relative flex items-center">
+                        <input type="text" id="origin" placeholder="Digite endereço ou local de partida..." class="w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
+                        <button type="button" onclick="clearField('origin')" class="absolute right-2.5 text-slate-500 hover:text-slate-300 p-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Destino -->
                 <div>
-                    <label class="block text-xs font-medium text-gray-700">Preço / Km (R$)</label>
-                    <input type="number" id="pricePerKm" value="1.50" step="0.10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-rose-500 ring-2 ring-rose-500/20"></span>
+                        Destino Final
+                    </label>
+                    <div class="relative flex items-center">
+                        <input type="text" id="destination" placeholder="Para onde o passageiro vai?" class="w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
+                        <button type="button" onclick="clearField('destination')" class="absolute right-2.5 text-slate-500 hover:text-slate-300 p-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-700">Preço / Min (R$)</label>
-                    <input type="number" id="pricePerMin" value="0.25" step="0.05" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+
+                <!-- Multiplicador / Bandeira Dinâmica Rápida -->
+                <div class="pt-1">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Modo de Tarifa / Adicional</span>
+                        <span id="multiplierLabel" class="text-xs font-mono-numbers font-bold text-amber-400">Normal (1.0x)</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-1.5 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                        <button type="button" onclick="setMultiplier(1.0, 'Normal')" class="multiplier-btn py-1.5 text-xs font-bold rounded-lg transition-all bg-amber-400 text-slate-950 shadow-sm" data-mult="1.0">1.0x</button>
+                        <button type="button" onclick="setMultiplier(1.15, 'Noturno +15%')" class="multiplier-btn py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all" data-mult="1.15">1.15x</button>
+                        <button type="button" onclick="setMultiplier(1.25, 'Pico +25%')" class="multiplier-btn py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all" data-mult="1.25">1.25x</button>
+                        <button type="button" onclick="setMultiplier(1.4, 'Chuva/Alta +40%')" class="multiplier-btn py-1.5 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition-all" data-mult="1.4">1.4x</button>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-gray-700">Valor Mínimo (R$)</label>
-                    <input type="number" id="minFare" value="7.00" step="0.50" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+
+                <!-- Main Action Button -->
+                <button id="calcBtn" onclick="calculateRoute()" class="w-full mt-2 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-extrabold py-3.5 px-4 rounded-xl hover:from-amber-300 hover:to-amber-500 active:scale-[0.98] transition-all duration-150 shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
+                    <svg id="calcIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span id="calcBtnText">Calcular Rota & Valor</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Result Hero Card (Appears after calculation) -->
+        <div id="resultContainer" class="hidden transition-all duration-300">
+            <div class="glass-panel rounded-2xl overflow-hidden border border-emerald-500/30 shadow-2xl relative">
+                <!-- Glowing corner effect -->
+                <div class="absolute -top-12 -right-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                <!-- Metrics Strip -->
+                <div class="grid grid-cols-3 divide-x divide-slate-800/80 bg-slate-900/90 border-b border-slate-800 text-center py-2.5 px-1">
+                    <div class="px-2">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Distância</span>
+                        <span id="distanceInfo" class="font-mono-numbers font-bold text-sm text-slate-100">0.0 km</span>
+                    </div>
+                    <div class="px-2">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Tempo Estimado</span>
+                        <span id="timeInfo" class="font-mono-numbers font-bold text-sm text-slate-100">0 min</span>
+                    </div>
+                    <div class="px-2">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Adicional</span>
+                        <span id="badgeMultApplied" class="font-mono-numbers font-bold text-xs text-amber-400 mt-0.5 inline-block">1.0x</span>
+                    </div>
+                </div>
+
+                <!-- Big Fare Output -->
+                <div class="p-5 flex flex-col items-center justify-center text-center bg-gradient-to-b from-transparent to-emerald-950/20">
+                    <span class="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">Valor Final da Corrida</span>
+                    <div class="flex items-baseline justify-center gap-1">
+                        <span class="text-2xl font-bold text-emerald-400">R$</span>
+                        <span id="totalFareNumber" class="text-5xl font-extrabold tracking-tight text-white font-mono-numbers">0,00</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-2 font-medium" id="fareBreakdown">Tarifa base inclusa</p>
+
+                    <!-- Driver Fast Action Bar -->
+                    <div class="w-full grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-800/80">
+                        <button onclick="copyFareValue()" id="copyBtn" class="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 border border-slate-700/80 transition-all active:scale-95">
+                            <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+                            </svg>
+                            <span id="copyBtnLabel">Copiar Valor</span>
+                        </button>
+                        
+                        <button onclick="shareWhatsAppQuote()" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950 transition-all active:scale-95">
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+                            </svg>
+                            Enviar p/ Cliente
+                        </button>
+                    </div>
                 </div>
             </div>
-        </details>
+        </div>
 
-        <!-- Entradas da Corrida -->
-        <div class="space-y-4">
+        <!-- Integrated Map Container (Cockpit View) -->
+        <div class="glass-panel rounded-2xl p-2.5 border border-slate-800 shadow-xl flex-1 flex flex-col min-h-[260px] relative">
+            <div class="flex items-center justify-between px-2 pb-2 text-[11px] font-bold text-slate-400">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    VISUALIZAÇÃO DO TRAJETO
+                </span>
+                <button type="button" onclick="centerDriverOnMap()" class="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Focar em Mim
+                </button>
+            </div>
+            
+            <div class="relative w-full flex-1 rounded-xl overflow-hidden border border-slate-800/90">
+                <div id="map"></div>
+                
+                <!-- Floating GPS accuracy badge on top of map -->
+                <div id="mapOverlayNotice" class="absolute bottom-2 left-2 bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] text-slate-300 font-medium flex items-center gap-1.5 pointer-events-none">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    Localização ao vivo
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation / Quick Helper Info -->
+    <footer class="w-full max-w-lg mx-auto px-4 mt-3 text-center">
+        <p class="text-[11px] text-slate-400 font-medium">
+            Drive Pilot • Tarifas salvas no seu aparelho • Para suporte veicular
+        </p>
+    </footer>
+
+    <!-- SETTINGS MODAL (Drawer / Overlay) -->
+    <div id="configModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl space-y-5 animate-in slide-in-from-bottom duration-200">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2">
+                    <div class="p-2 rounded-lg bg-amber-400/10 text-amber-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-bold text-white">Configurar Tarifas</h2>
+                        <p class="text-xs text-slate-400">Ajuste os valores cobrados nas suas corridas</p>
+                    </div>
+                </div>
+                <button onclick="toggleConfigModal(false)" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Inputs de Taxas -->
+            <div class="grid grid-cols-2 gap-3.5">
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Partida / Bandeirada</label>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-amber-400">R$</span>
+                        <input type="number" id="baseFare" value="4.00" step="0.50" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Preço por Km</label>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-amber-400">R$</span>
+                        <input type="number" id="pricePerKm" value="1.80" step="0.10" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Preço por Minuto</label>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-amber-400">R$</span>
+                        <input type="number" id="pricePerMin" value="0.30" step="0.05" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Valor Mínimo</label>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-amber-400">R$</span>
+                        <input type="number" id="minFare" value="8.00" step="1.00" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presets rápidos -->
             <div>
-                <label class="block text-sm font-medium text-gray-700">Local de Partida (Passageiro)</label>
-                <div class="flex mt-1">
-                    <input type="text" id="origin" placeholder="Ex: Rua das Flores, 123" class="block w-full rounded-l-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 border">
-                    <button onclick="useMyLocation()" class="bg-gray-200 text-gray-700 px-3 rounded-r-md border border-l-0 border-gray-300 hover:bg-gray-300" title="Usar onde estou agora">
-                        📍
+                <span class="block text-[11px] font-bold uppercase text-slate-400 mb-2">Predefinições Rápidas</span>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="applyPreset(3.5, 1.5, 0.25, 7.0)" class="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold text-center border border-slate-700/60">
+                        Econômico
+                    </button>
+                    <button type="button" onclick="applyPreset(4.0, 1.8, 0.30, 8.0)" class="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold text-center border border-slate-700/60">
+                        Padrão
+                    </button>
+                    <button type="button" onclick="applyPreset(5.0, 2.2, 0.40, 10.0)" class="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold text-center border border-slate-700/60">
+                        Confort / Noturno
                     </button>
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Destino</label>
-                <input type="text" id="destination" placeholder="Ex: Shopping Centro" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 border">
-            </div>
-
-            <button onclick="calculateRoute()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200 mt-4 shadow-md">
-                Buscar Rota e Calcular Preço
+            <button onclick="saveAndCloseConfig()" class="w-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold py-3.5 rounded-xl transition-all shadow-lg shadow-amber-400/20 text-sm uppercase tracking-wide">
+                Salvar Configurações
             </button>
-        </div>
-
-        <!-- Mapa -->
-        <div id="map" class="hidden"></div>
-
-        <!-- Resultado -->
-        <div id="resultContainer" class="mt-6 hidden">
-            <div class="bg-gray-100 p-3 rounded-t-lg flex justify-between text-sm text-gray-700 border-b">
-                <span>🛣️ Distância: <strong id="distanceInfo">-</strong></span>
-                <span>⏱️ Tempo: <strong id="timeInfo">-</strong></span>
-            </div>
-            <div class="bg-green-50 border-x-4 border-b-4 border-green-500 p-4 rounded-b-lg flex flex-col items-center">
-                <p class="text-sm text-green-700 font-medium mb-1">Valor Sugerido para o Passageiro</p>
-                <p id="totalFare" class="text-4xl font-bold text-green-800">R$ 0,00</p>
-            </div>
         </div>
     </div>
 
+    <!-- JS Application Logic -->
     <script>
         let map, directionsService, directionsRenderer, driverMarker;
         let driverPosition = null;
+        let currentMultiplier = 1.0;
+        let currentMultiplierDesc = 'Normal';
+        let lastCalculation = null;
+
+        // Custom Dark Mode Map Styles (Optimized for Night Driving / Battery Saving)
+        const darkMapStyle = [
+            { "elementType": "geometry", "stylers": [{ "color": "#0f172a" }] },
+            { "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+            { "elementType": "labels.text.stroke", "stylers": [{ "color": "#020617" }] },
+            { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
+            { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
+            { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#064e3b" }] },
+            { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+            { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#0f172a" }] },
+            { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#e2e8f0" }] },
+            { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
+            { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
+            { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f8fafc" }] },
+            { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+            { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#020617" }] },
+            { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] }
+        ];
 
         window.onload = function() {
-            const savedSettings = JSON.parse(localStorage.getItem('taxiSettings'));
-            if (savedSettings) {
-                document.getElementById('baseFare').value = savedSettings.baseFare;
-                document.getElementById('pricePerKm').value = savedSettings.pricePerKm;
-                document.getElementById('pricePerMin').value = savedSettings.pricePerMin;
-                document.getElementById('minFare').value = savedSettings.minFare;
-            }
+            loadSavedSettings();
+            updateRateSummaryBadge();
         };
 
-        function saveSettings(baseFare, pricePerKm, pricePerMin, minFare) {
-            localStorage.setItem('taxiSettings', JSON.stringify({ baseFare, pricePerKm, pricePerMin, minFare }));
+        function loadSavedSettings() {
+            const saved = JSON.parse(localStorage.getItem('drivePilotSettings'));
+            if (saved) {
+                document.getElementById('baseFare').value = saved.baseFare;
+                document.getElementById('pricePerKm').value = saved.pricePerKm;
+                document.getElementById('pricePerMin').value = saved.pricePerMin;
+                document.getElementById('minFare').value = saved.minFare;
+            }
         }
 
-        // Função chamada pelo Google Maps ao carregar
+        function saveSettings(baseFare, pricePerKm, pricePerMin, minFare) {
+            localStorage.setItem('drivePilotSettings', JSON.stringify({ baseFare, pricePerKm, pricePerMin, minFare }));
+            updateRateSummaryBadge();
+        }
+
+        function updateRateSummaryBadge() {
+            const km = parseFloat(document.getElementById('pricePerKm').value) || 1.80;
+            document.getElementById('rateSummaryBadge').innerText = `R$ ${km.toFixed(2).replace('.', ',')}/km`;
+        }
+
+        function toggleConfigModal(show) {
+            const modal = document.getElementById('configModal');
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function saveAndCloseConfig() {
+            const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
+            const pricePerKm = parseFloat(document.getElementById('pricePerKm').value) || 0;
+            const pricePerMin = parseFloat(document.getElementById('pricePerMin').value) || 0;
+            const minFare = parseFloat(document.getElementById('minFare').value) || 0;
+
+            saveSettings(baseFare, pricePerKm, pricePerMin, minFare);
+            toggleConfigModal(false);
+
+            // Se já tem cálculo na tela, recalcula com os novos parâmetros
+            if (lastCalculation) {
+                calculateFare(lastCalculation.distanceKm, lastCalculation.timeMin);
+            }
+        }
+
+        function applyPreset(base, km, min, minimum) {
+            document.getElementById('baseFare').value = base.toFixed(2);
+            document.getElementById('pricePerKm').value = km.toFixed(2);
+            document.getElementById('pricePerMin').value = min.toFixed(2);
+            document.getElementById('minFare').value = minimum.toFixed(2);
+        }
+
+        function setMultiplier(mult, desc) {
+            currentMultiplier = mult;
+            currentMultiplierDesc = desc;
+            
+            document.getElementById('multiplierLabel').innerText = `${desc} (${mult.toFixed(2)}x)`;
+
+            // Atualiza botões
+            document.querySelectorAll('.multiplier-btn').forEach(btn => {
+                const val = parseFloat(btn.getAttribute('data-mult'));
+                if (Math.abs(val - mult) < 0.01) {
+                    btn.classList.add('bg-amber-400', 'text-slate-950', 'shadow-sm');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-amber-400', 'text-slate-950', 'shadow-sm');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+
+            if (lastCalculation) {
+                calculateFare(lastCalculation.distanceKm, lastCalculation.timeMin);
+            }
+        }
+
+        function clearField(id) {
+            document.getElementById(id).value = '';
+            document.getElementById(id).focus();
+        }
+
+        // Inicialização do Google Maps
         function initMap() {
             directionsService = new google.maps.DirectionsService();
-            directionsRenderer = new google.maps.DirectionsRenderer();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                polylineOptions: {
+                    strokeColor: "#fbbf24", // Rota Amarela Neon de Alto Contraste
+                    strokeWeight: 6,
+                    strokeOpacity: 0.95
+                },
+                suppressMarkers: false
+            });
             
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 13,
-                center: { lat: -23.55052, lng: -46.633308 }, // SP por padrão
+                zoom: 14,
+                center: { lat: -23.55052, lng: -46.633308 },
                 disableDefaultUI: true,
-                zoomControl: true
+                zoomControl: true,
+                styles: darkMapStyle
             });
+            
             directionsRenderer.setMap(map);
 
-            // Adiciona autocomplete nos inputs
+            // Autocomplete com foco em endereços do Brasil
+            const options = {
+                componentRestrictions: { country: "br" },
+                fields: ["formatted_address", "geometry", "name"]
+            };
+
             const originInput = document.getElementById("origin");
             const destinationInput = document.getElementById("destination");
-            
-            const options = {
-                componentRestrictions: { country: "br" }
-            };
 
             new google.maps.places.Autocomplete(originInput, options);
             new google.maps.places.Autocomplete(destinationInput, options);
 
-            getDriverLocation();
+            trackDriverLocation();
         }
 
-        function getDriverLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    driverPosition = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    };
-                    
-                    document.getElementById('map').classList.remove('hidden');
-                    map.setCenter(driverPosition);
-                    map.setZoom(15);
-                    
-                    if (driverMarker) driverMarker.setMap(null);
-                    
-                    driverMarker = new google.maps.Marker({
-                        position: driverPosition,
-                        map: map,
-                        title: "Você está aqui",
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: "#4285F4",
-                            fillOpacity: 1,
-                            strokeColor: "white",
-                            strokeWeight: 2,
-                        }
-                    });
+        function trackDriverLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        updateDriverPosition(position.coords.latitude, position.coords.longitude);
+                    },
+                    (error) => {
+                        console.warn("GPS inicial não capturado:", error.message);
+                        document.getElementById('driverStatusSubtitle').innerText = "GPS aguardando sinal";
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+
+                // Observa movimentação suave em tempo real
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        updateDriverPosition(position.coords.latitude, position.coords.longitude);
+                    },
+                    null,
+                    { enableHighAccuracy: true, maximumAge: 15000 }
+                );
+            }
+        }
+
+        function updateDriverPosition(lat, lng) {
+            driverPosition = { lat, lng };
+            document.getElementById('driverStatusSubtitle').innerText = "Sinal GPS excelente";
+
+            if (!driverMarker) {
+                driverMarker = new google.maps.Marker({
+                    position: driverPosition,
+                    map: map,
+                    title: "Sua Posição",
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 7,
+                        fillColor: "#38bdf8",
+                        fillOpacity: 1,
+                        strokeColor: "#ffffff",
+                        strokeWeight: 2,
+                    }
                 });
+                map.setCenter(driverPosition);
+            } else {
+                driverMarker.setPosition(driverPosition);
+            }
+        }
+
+        function centerDriverOnMap() {
+            if (driverPosition && map) {
+                map.panTo(driverPosition);
+                map.setZoom(16);
+            } else {
+                useMyLocation();
             }
         }
 
         function useMyLocation() {
             if (driverPosition) {
-                // Em vez de preencher com texto, vamos apenas mostrar o alerta, 
-                // pois o Google Places espera um endereço em texto. 
-                // Uma solução simples: setamos o valor como "Minha Localização Atual"
-                // e na hora de rotear passamos as coordenadas se o texto for esse.
                 document.getElementById("origin").value = "Minha Localização Atual";
+                centerDriverOnMap();
             } else {
-                alert("Sua localização ainda não foi detectada. Tente novamente.");
-                getDriverLocation();
+                document.getElementById('calcBtnText').innerText = "Obtendo GPS...";
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    updateDriverPosition(pos.coords.latitude, pos.coords.longitude);
+                    document.getElementById("origin").value = "Minha Localização Atual";
+                    document.getElementById('calcBtnText').innerText = "Calcular Rota & Valor";
+                }, () => {
+                    alert("Por favor, ative a permissão de localização do seu navegador.");
+                    document.getElementById('calcBtnText').innerText = "Calcular Rota & Valor";
+                }, { enableHighAccuracy: true });
             }
         }
 
         function calculateRoute() {
-            let origin = document.getElementById("origin").value;
-            const destination = document.getElementById("destination").value;
-            
+            let origin = document.getElementById("origin").value.trim();
+            const destination = document.getElementById("destination").value.trim();
+
             if (!origin || !destination) {
-                alert("Preencha partida e destino.");
+                alert("Por favor, preencha o local de partida e o destino.");
                 return;
             }
 
-            document.getElementById('map').classList.remove('hidden');
+            // UI feedback
+            const btn = document.getElementById('calcBtn');
+            const btnText = document.getElementById('calcBtnText');
+            btnText.innerText = "Calculando melhor trajeto...";
+            btn.classList.add('opacity-90');
 
-            // Se o usuário clicou em usar localização atual
             if (origin === "Minha Localização Atual" && driverPosition) {
-                origin = driverPosition;
+                origin = new google.maps.LatLng(driverPosition.lat, driverPosition.lng);
             }
 
             const request = {
                 origin: origin,
                 destination: destination,
-                travelMode: 'DRIVING',
+                travelMode: google.maps.TravelMode.DRIVING,
+                drivingOptions: {
+                    departureTime: new Date(),
+                    trafficModel: 'bestguess'
+                },
                 language: 'pt-BR'
             };
 
             directionsService.route(request, (result, status) => {
-                if (status == 'OK') {
+                btnText.innerText = "Calcular Rota & Valor";
+                btn.classList.remove('opacity-90');
+
+                if (status === google.maps.DirectionsStatus.OK) {
                     directionsRenderer.setDirections(result);
                     
-                    const route = result.routes[0].legs[0];
-                    const distanceKm = route.distance.value / 1000;
-                    const timeMin = route.duration.value / 60;
-                    
-                    document.getElementById("distanceInfo").innerText = route.distance.text;
-                    document.getElementById("timeInfo").innerText = route.duration.text;
-                    
+                    const leg = result.routes[0].legs[0];
+                    const distanceKm = leg.distance.value / 1000;
+                    const timeMin = Math.ceil(leg.duration.value / 60);
+
+                    lastCalculation = {
+                        distanceKm,
+                        timeMin,
+                        distanceText: leg.distance.text,
+                        timeText: leg.duration.text,
+                        startAddress: leg.start_address,
+                        endAddress: leg.end_address
+                    };
+
+                    document.getElementById("distanceInfo").innerText = leg.distance.text;
+                    document.getElementById("timeInfo").innerText = leg.duration.text;
+                    document.getElementById("badgeMultApplied").innerText = `${currentMultiplier.toFixed(2)}x`;
+
                     calculateFare(distanceKm, timeMin);
+
+                    // Rolagem suave até o resultado se estiver em tela pequena
+                    const resultEl = document.getElementById('resultContainer');
+                    resultEl.classList.remove('hidden');
+                    resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
                 } else {
-                    alert("Não foi possível calcular a rota. Verifique os endereços.");
+                    alert("Não foi possível traçar a rota. Verifique os endereços digitados ou tente novamente.");
                 }
             });
         }
 
-        function calculateFare(distance, time) {
+        function calculateFare(distanceKm, timeMin) {
             const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
             const pricePerKm = parseFloat(document.getElementById('pricePerKm').value) || 0;
             const pricePerMin = parseFloat(document.getElementById('pricePerMin').value) || 0;
             const minFare = parseFloat(document.getElementById('minFare').value) || 0;
-            
-            saveSettings(baseFare, pricePerKm, pricePerMin, minFare);
 
-            let total = baseFare + (distance * pricePerKm) + (time * pricePerMin);
-            
+            let subtotal = baseFare + (distanceKm * pricePerKm) + (timeMin * pricePerMin);
+            let total = subtotal * currentMultiplier;
+
+            let isMinimum = false;
             if (total < minFare) {
                 total = minFare;
+                isMinimum = true;
             }
 
-            document.getElementById('totalFare').innerText = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            document.getElementById('resultContainer').classList.remove('hidden');
+            // Arredonda para 50 centavos mais próximos para facilitar troco em dinheiro/pix se desejado
+            // Exibimos o valor formatado
+            const formattedTotal = total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('totalFareNumber').innerText = formattedTotal;
+
+            if (isMinimum) {
+                document.getElementById('fareBreakdown').innerText = `Tarifa mínima aplicada (R$ ${minFare.toFixed(2).replace('.', ',')})`;
+            } else if (currentMultiplier > 1.0) {
+                document.getElementById('fareBreakdown').innerText = `Base: R$ ${subtotal.toFixed(2).replace('.', ',')} + Ajuste ${currentMultiplierDesc}`;
+            } else {
+                document.getElementById('fareBreakdown').innerText = `Base: R$ ${baseFare.toFixed(2)} + ${distanceKm.toFixed(1)}km + ${timeMin}min`;
+            }
+
+            lastCalculation.finalPrice = total;
+            lastCalculation.formattedPrice = formattedTotal;
+        }
+
+        function copyFareValue() {
+            if (!lastCalculation) return;
+            const textToCopy = `R$ ${lastCalculation.formattedPrice}`;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const label = document.getElementById('copyBtnLabel');
+                const originalText = label.innerText;
+                label.innerText = "Copiado! ✓";
+                setTimeout(() => { label.innerText = originalText; }, 2000);
+            });
+        }
+
+        function shareWhatsAppQuote() {
+            if (!lastCalculation) return;
+            const origin = document.getElementById("origin").value.trim();
+            const dest = document.getElementById("destination").value.trim();
+            
+            const message = `Olá! Segue a cotação da sua corrida:\n\n📍 *Embarque:* ${origin}\n🏁 *Destino:* ${dest}\n🛣️ *Distância:* ${lastCalculation.distanceText} (~${lastCalculation.timeText})\n💰 *Valor:* *R$ ${lastCalculation.formattedPrice}*\n\nPodemos confirmar?`;
+            
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
         }
     </script>
 </body>
