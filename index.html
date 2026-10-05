@@ -16,6 +16,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
+    <!-- Leaflet CSS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -123,6 +126,7 @@
             min-height: 200px;
             border-radius: 0.875rem;
             overflow: hidden;
+            z-index: 1; /* Para não sobrepor o dropdown */
         }
 
         #map {
@@ -130,46 +134,72 @@
             height: 100%;
             background-color: #0b1120;
         }
+        
+        /* Ajuste de Filtro Dark Mode para o Mapa OpenStreetMap */
+        .leaflet-layer,
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out,
+        .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
 
-        /* Google Places Autocomplete dropdown - Mobile Full-Width Drop */
-        .pac-container {
-            background-color: #0f172a !important;
-            border: 1px solid #334155 !important;
-            border-radius: 0.875rem !important;
-            margin-top: 4px !important;
-            font-family: 'Plus Jakarta Sans', sans-serif !important;
-            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.7) !important;
-            z-index: 99999 !important;
-            max-width: calc(100vw - 2rem) !important;
+        /* Autocomplete Custom UI */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.875rem;
+            margin-top: 4px;
+            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.7);
+            z-index: 99999;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
         }
-        .pac-item {
-            border-top: 1px solid #1e293b !important;
-            padding: 12px 14px !important;
-            font-size: 14px !important;
-            color: #94a3b8 !important;
-            cursor: pointer !important;
+        
+        .autocomplete-dropdown.active {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
         }
-        .pac-item:hover, .pac-item-selected {
-            background-color: #1e293b !important;
+
+        .autocomplete-item {
+            padding: 12px 14px;
+            font-size: 14px;
+            color: #cbd5e1;
+            border-bottom: 1px solid #1e293b;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
         }
-        .pac-item-query {
-            font-size: 14px !important;
-            color: #f8fafc !important;
-            padding-right: 4px !important;
+        .autocomplete-item:last-child {
+            border-bottom: none;
         }
-        .pac-matched {
-            color: #fbbf24 !important;
-            font-weight: 700 !important;
+        .autocomplete-item:active, .autocomplete-item:hover {
+            background-color: #1e293b;
         }
-        .pac-icon {
-            filter: invert(0.8) hue-rotate(180deg) !important;
+        .autocomplete-item-main {
+            color: #f8fafc;
+            font-weight: 600;
+        }
+        .autocomplete-item-sub {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* ==========================================================================
            @MEDIA QUERIES FOR TRUE MOBILE-FIRST PROGRESSION
            ========================================================================== */
 
-        /* Ultra-small mobile phones (e.g. iPhone SE, Galaxy Fold 320px-375px) */
         @media screen and (max-width: 374px) {
             .app-container {
                 padding-left: 0.5rem !important;
@@ -187,13 +217,11 @@
             }
         }
 
-        /* Standard Smartphones (up to 640px) */
         @media screen and (max-width: 639px) {
             .app-shell {
                 width: 100%;
                 max-width: 100%;
             }
-            /* Pin modal as bottom action-sheet on phones */
             .modal-dialog {
                 width: 100% !important;
                 max-width: 100% !important;
@@ -201,9 +229,8 @@
                 border-bottom-right-radius: 0 !important;
                 padding-bottom: max(1.5rem, calc(var(--safe-area-bottom) + 1rem)) !important;
             }
-            /* Larger tap targets for mobile driving inputs */
             .mobile-input {
-                font-size: 16px !important; /* Prevents auto-zoom in iOS Safari */
+                font-size: 16px !important; 
                 padding-top: 0.875rem !important;
                 padding-bottom: 0.875rem !important;
             }
@@ -214,7 +241,6 @@
             }
         }
 
-        /* Tablets & Foldables (min-width: 640px) */
         @media screen and (min-width: 640px) {
             .app-shell {
                 max-width: 520px;
@@ -230,7 +256,6 @@
             }
         }
 
-        /* In-Car Horizontal Mount / Smartphone Landscape Mode */
         @media screen and (max-height: 500px) and (orientation: landscape) {
             body {
                 padding-bottom: 0.5rem;
@@ -251,17 +276,10 @@
                 font-size: 2.5rem !important;
             }
         }
-
-        /* High-DPI screens (Retina) */
-        @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-            .glass-panel {
-                border-width: 0.5px;
-            }
-        }
     </style>
     
-    <!-- Google Maps JS API -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AQ.Ab8RN6IGp7p7hE4nEqm9KS2wtsyaMmOuL-6hKy4NHFn3QpUPKQ&libraries=places&callback=initMap"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 
 <body class="min-h-screen bg-slate-950 flex flex-col justify-between antialiased selection:bg-amber-400 selection:text-slate-950 pb-6">
@@ -300,7 +318,7 @@
         <!-- Left / Top Column: Controls & Results -->
         <div class="flex flex-col gap-3 sm:gap-4">
             <!-- Input Dispatch Card -->
-            <div class="glass-panel rounded-2xl p-3.5 sm:p-4 shadow-2xl relative overflow-hidden border border-slate-800/80">
+            <div class="glass-panel rounded-2xl p-3.5 sm:p-4 shadow-2xl relative overflow-visible border border-slate-800/80">
                 <!-- Decorative Subtle Accent Line -->
                 <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"></div>
 
@@ -322,10 +340,12 @@
                             </button>
                         </div>
                         <div class="relative flex items-center">
-                            <input type="text" id="origin" placeholder="Digite endereço de embarque..." class="mobile-input w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
+                            <input type="text" id="origin" autocomplete="off" placeholder="Digite endereço de embarque..." class="mobile-input w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
                             <button type="button" onclick="clearField('origin')" class="absolute right-2.5 text-slate-500 hover:text-slate-300 p-1.5">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
+                            <!-- Dropdown de Sugestões Oculto -->
+                            <div id="originDropdown" class="autocomplete-dropdown"></div>
                         </div>
                     </div>
 
@@ -336,10 +356,12 @@
                             Destino Final
                         </label>
                         <div class="relative flex items-center">
-                            <input type="text" id="destination" placeholder="Para onde o passageiro vai?" class="mobile-input w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
+                            <input type="text" id="destination" autocomplete="off" placeholder="Para onde o passageiro vai?" class="mobile-input w-full bg-slate-900/90 text-white placeholder-slate-500 text-sm rounded-xl px-3.5 py-3 pr-9 border border-slate-700/80 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all shadow-inner">
                             <button type="button" onclick="clearField('destination')" class="absolute right-2.5 text-slate-500 hover:text-slate-300 p-1.5">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
+                            <!-- Dropdown de Sugestões Oculto -->
+                            <div id="destinationDropdown" class="autocomplete-dropdown"></div>
                         </div>
                     </div>
 
@@ -436,7 +458,7 @@
                 <div id="map"></div>
                 
                 <!-- Floating GPS accuracy badge on top of map -->
-                <div id="mapOverlayNotice" class="absolute bottom-2 left-2 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] text-slate-300 font-medium flex items-center gap-1.5 pointer-events-none">
+                <div id="mapOverlayNotice" class="absolute bottom-2 left-2 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[10px] text-slate-300 font-medium flex items-center gap-1.5 pointer-events-none z-[400]">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                     Localização ao vivo
                 </div>
@@ -530,34 +552,23 @@
 
     <!-- JS Application Logic -->
     <script>
-        let map, directionsService, directionsRenderer, driverMarker;
+        let map, driverMarker, routeLayer;
         let driverPosition = null;
         let currentMultiplier = 1.0;
         let currentMultiplierDesc = 'Normal';
         let lastCalculation = null;
 
-        // Custom Dark Mode Map Styles (Optimized for Night Driving / Battery Saving)
-        const darkMapStyle = [
-            { "elementType": "geometry", "stylers": [{ "color": "#0f172a" }] },
-            { "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
-            { "elementType": "labels.text.stroke", "stylers": [{ "color": "#020617" }] },
-            { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
-            { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#64748b" }] },
-            { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#064e3b" }] },
-            { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-            { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#0f172a" }] },
-            { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#e2e8f0" }] },
-            { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
-            { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
-            { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f8fafc" }] },
-            { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
-            { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#020617" }] },
-            { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#475569" }] }
-        ];
+        // Armazenamento de coordenadas para roteamento
+        const locationData = {
+            origin: null,     // { lat, lon }
+            destination: null // { lat, lon }
+        };
 
         window.onload = function() {
             loadSavedSettings();
             updateRateSummaryBadge();
+            initMap();
+            setupAutocomplete();
         };
 
         function loadSavedSettings() {
@@ -598,7 +609,6 @@
             saveSettings(baseFare, pricePerKm, pricePerMin, minFare);
             toggleConfigModal(false);
 
-            // Se já tem cálculo na tela, recalcula com os novos parâmetros
             if (lastCalculation) {
                 calculateFare(lastCalculation.distanceKm, lastCalculation.timeMin);
             }
@@ -617,7 +627,6 @@
             
             document.getElementById('multiplierLabel').innerText = `${desc} (${mult.toFixed(2)}x)`;
 
-            // Atualiza botões
             document.querySelectorAll('.multiplier-btn').forEach(btn => {
                 const val = parseFloat(btn.getAttribute('data-mult'));
                 if (Math.abs(val - mult) < 0.01) {
@@ -636,42 +645,23 @@
 
         function clearField(id) {
             document.getElementById(id).value = '';
+            locationData[id] = null;
             document.getElementById(id).focus();
         }
 
-        // Inicialização do Google Maps
+        // =========================================================================
+        // OPENSTREETMAP & LEAFLET LOGIC
+        // =========================================================================
         function initMap() {
-            directionsService = new google.maps.DirectionsService();
-            directionsRenderer = new google.maps.DirectionsRenderer({
-                polylineOptions: {
-                    strokeColor: "#fbbf24", // Rota Amarela Neon de Alto Contraste
-                    strokeWeight: 6,
-                    strokeOpacity: 0.95
-                },
-                suppressMarkers: false
-            });
-            
-            map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 14,
-                center: { lat: -23.55052, lng: -46.633308 },
-                disableDefaultUI: true,
-                zoomControl: true,
-                styles: darkMapStyle
-            });
-            
-            directionsRenderer.setMap(map);
+            // Inicializa Mapa (São Paulo por padrão)
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([-23.55052, -46.633308], 14);
 
-            // Autocomplete com foco em endereços do Brasil
-            const options = {
-                componentRestrictions: { country: "br" },
-                fields: ["formatted_address", "geometry", "name"]
-            };
-
-            const originInput = document.getElementById("origin");
-            const destinationInput = document.getElementById("destination");
-
-            new google.maps.places.Autocomplete(originInput, options);
-            new google.maps.places.Autocomplete(destinationInput, options);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+            }).addTo(map);
 
             trackDriverLocation();
         }
@@ -689,7 +679,6 @@
                     { enableHighAccuracy: true, timeout: 10000 }
                 );
 
-                // Observa movimentação suave em tempo real
                 navigator.geolocation.watchPosition(
                     (position) => {
                         updateDriverPosition(position.coords.latitude, position.coords.longitude);
@@ -705,29 +694,22 @@
             document.getElementById('driverStatusSubtitle').innerText = "Sinal GPS excelente";
 
             if (!driverMarker) {
-                driverMarker = new google.maps.Marker({
-                    position: driverPosition,
-                    map: map,
-                    title: "Sua Posição",
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 7,
-                        fillColor: "#38bdf8",
-                        fillOpacity: 1,
-                        strokeColor: "#ffffff",
-                        strokeWeight: 2,
-                    }
+                const icon = L.divIcon({
+                    html: '<div style="width:14px;height:14px;background:#38bdf8;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(56,189,248,0.8);"></div>',
+                    className: '',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
                 });
-                map.setCenter(driverPosition);
+                driverMarker = L.marker([lat, lng], {icon: icon}).addTo(map);
+                map.setView([lat, lng], 15);
             } else {
-                driverMarker.setPosition(driverPosition);
+                driverMarker.setLatLng([lat, lng]);
             }
         }
 
         function centerDriverOnMap() {
             if (driverPosition && map) {
-                map.panTo(driverPosition);
-                map.setZoom(16);
+                map.setView([driverPosition.lat, driverPosition.lng], 16);
             } else {
                 useMyLocation();
             }
@@ -736,12 +718,14 @@
         function useMyLocation() {
             if (driverPosition) {
                 document.getElementById("origin").value = "Minha Localização Atual";
+                locationData.origin = { lat: driverPosition.lat, lon: driverPosition.lng };
                 centerDriverOnMap();
             } else {
                 document.getElementById('calcBtnText').innerText = "Obtendo GPS...";
                 navigator.geolocation.getCurrentPosition((pos) => {
                     updateDriverPosition(pos.coords.latitude, pos.coords.longitude);
                     document.getElementById("origin").value = "Minha Localização Atual";
+                    locationData.origin = { lat: pos.coords.latitude, lon: pos.coords.longitude };
                     document.getElementById('calcBtnText').innerText = "Calcular Rota & Valor";
                 }, () => {
                     alert("Por favor, ative a permissão de localização do seu navegador.");
@@ -750,71 +734,140 @@
             }
         }
 
-        function calculateRoute() {
-            let origin = document.getElementById("origin").value.trim();
-            const destination = document.getElementById("destination").value.trim();
+        // =========================================================================
+        // AUTOCOMPLETE CUSTOM (NOMINATIM / OPENSTREETMAP API)
+        // =========================================================================
+        function setupAutocomplete() {
+            setupInput('origin', 'originDropdown');
+            setupInput('destination', 'destinationDropdown');
+            
+            // Fecha dropdown ao clicar fora
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.relative')) {
+                    document.getElementById('originDropdown').classList.remove('active');
+                    document.getElementById('destinationDropdown').classList.remove('active');
+                }
+            });
+        }
 
-            if (!origin || !destination) {
-                alert("Por favor, preencha o local de partida e o destino.");
+        function setupInput(inputId, dropdownId) {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            let debounceTimer;
+
+            input.addEventListener('input', () => {
+                clearTimeout(debounceTimer);
+                locationData[inputId] = null; // reseta coord
+                const query = input.value.trim();
+                
+                if (query.length < 3) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                debounceTimer = setTimeout(async () => {
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=br&limit=5&q=${encodeURIComponent(query)}`);
+                        const data = await res.json();
+                        
+                        dropdown.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                const div = document.createElement('div');
+                                div.className = 'autocomplete-item';
+                                
+                                const name = item.address.road || item.address.neighbourhood || item.address.suburb || item.name;
+                                const city = item.address.city || item.address.town || item.address.village || item.address.municipality || '';
+                                const state = item.address.state || '';
+                                
+                                div.innerHTML = `
+                                    <svg class="w-4 h-4 mt-0.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                                    <div>
+                                        <div class="autocomplete-item-main">${name}</div>
+                                        <div class="autocomplete-item-sub">${city} ${city && state ? '-' : ''} ${state}</div>
+                                    </div>
+                                `;
+                                
+                                div.addEventListener('click', () => {
+                                    input.value = name + (city ? `, ${city}` : '');
+                                    locationData[inputId] = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
+                                    dropdown.classList.remove('active');
+                                });
+                                dropdown.appendChild(div);
+                            });
+                            dropdown.classList.add('active');
+                        } else {
+                            dropdown.classList.remove('active');
+                        }
+                    } catch (e) {
+                        console.error("Erro na busca de endereço", e);
+                    }
+                }, 600); // 600ms debounce
+            });
+        }
+
+        // =========================================================================
+        // ROUTING & FARE CALCULATION (OSRM API)
+        // =========================================================================
+        async function calculateRoute() {
+            if (!locationData.origin || !locationData.destination) {
+                alert("Por favor, selecione os endereços da lista de sugestões para calcularmos a rota.");
                 return;
             }
 
-            // UI feedback
-            const btn = document.getElementById('calcBtn');
             const btnText = document.getElementById('calcBtnText');
             btnText.innerText = "Calculando melhor trajeto...";
-            btn.classList.add('opacity-90');
+            
+            try {
+                const { lat: lat1, lon: lon1 } = locationData.origin;
+                const { lat: lat2, lon: lon2 } = locationData.destination;
 
-            if (origin === "Minha Localização Atual" && driverPosition) {
-                origin = new google.maps.LatLng(driverPosition.lat, driverPosition.lng);
-            }
+                // OSRM Public API (driving profile). Formato: {lon},{lat};{lon},{lat}
+                const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
 
-            const request = {
-                origin: origin,
-                destination: destination,
-                travelMode: google.maps.TravelMode.DRIVING,
-                drivingOptions: {
-                    departureTime: new Date(),
-                    trafficModel: 'bestguess'
-                },
-                language: 'pt-BR'
-            };
+                if (data.code === 'Ok' && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const distanceKm = route.distance / 1000;
+                    const timeMin = Math.ceil(route.duration / 60);
 
-            directionsService.route(request, (result, status) => {
-                btnText.innerText = "Calcular Rota & Valor";
-                btn.classList.remove('opacity-90');
+                    // Desenhar Rota no Mapa
+                    if (routeLayer) map.removeLayer(routeLayer);
+                    routeLayer = L.geoJSON(route.geometry, {
+                        style: { color: '#fbbf24', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }
+                    }).addTo(map);
 
-                if (status === google.maps.DirectionsStatus.OK) {
-                    directionsRenderer.setDirections(result);
-                    
-                    const leg = result.routes[0].legs[0];
-                    const distanceKm = leg.distance.value / 1000;
-                    const timeMin = Math.ceil(leg.duration.value / 60);
+                    // Ajustar visão do mapa
+                    map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
 
                     lastCalculation = {
                         distanceKm,
                         timeMin,
-                        distanceText: leg.distance.text,
-                        timeText: leg.duration.text,
-                        startAddress: leg.start_address,
-                        endAddress: leg.end_address
+                        distanceText: distanceKm.toFixed(1) + ' km',
+                        timeText: timeMin + ' min',
+                        startAddress: document.getElementById('origin').value,
+                        endAddress: document.getElementById('destination').value
                     };
 
-                    document.getElementById("distanceInfo").innerText = leg.distance.text;
-                    document.getElementById("timeInfo").innerText = leg.duration.text;
+                    document.getElementById("distanceInfo").innerText = lastCalculation.distanceText;
+                    document.getElementById("timeInfo").innerText = lastCalculation.timeText;
                     document.getElementById("badgeMultApplied").innerText = `${currentMultiplier.toFixed(2)}x`;
 
                     calculateFare(distanceKm, timeMin);
 
-                    // Rolagem suave até o resultado se estiver em tela pequena
                     const resultEl = document.getElementById('resultContainer');
                     resultEl.classList.remove('hidden');
                     resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
                 } else {
-                    alert("Não foi possível traçar a rota. Verifique os endereços digitados ou tente novamente.");
+                    alert("Não foi possível traçar a rota. Rota muito longa ou inacessível.");
                 }
-            });
+            } catch (e) {
+                console.error(e);
+                alert("Erro ao conectar com o servidor de rotas. Verifique sua conexão.");
+            } finally {
+                btnText.innerText = "Calcular Rota & Valor";
+            }
         }
 
         function calculateFare(distanceKm, timeMin) {
@@ -832,8 +885,6 @@
                 isMinimum = true;
             }
 
-            // Arredonda para 50 centavos mais próximos para facilitar troco em dinheiro/pix se desejado
-            // Exibimos o valor formatado
             const formattedTotal = total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             document.getElementById('totalFareNumber').innerText = formattedTotal;
 
@@ -845,30 +896,23 @@
                 document.getElementById('fareBreakdown').innerText = `Base: R$ ${baseFare.toFixed(2)} + ${distanceKm.toFixed(1)}km + ${timeMin}min`;
             }
 
-            lastCalculation.finalPrice = total;
             lastCalculation.formattedPrice = formattedTotal;
         }
 
         function copyFareValue() {
             if (!lastCalculation) return;
-            const textToCopy = `R$ ${lastCalculation.formattedPrice}`;
-            navigator.clipboard.writeText(textToCopy).then(() => {
+            navigator.clipboard.writeText(`R$ ${lastCalculation.formattedPrice}`).then(() => {
                 const label = document.getElementById('copyBtnLabel');
-                const originalText = label.innerText;
+                const original = label.innerText;
                 label.innerText = "Copiado! ✓";
-                setTimeout(() => { label.innerText = originalText; }, 2000);
+                setTimeout(() => { label.innerText = original; }, 2000);
             });
         }
 
         function shareWhatsAppQuote() {
             if (!lastCalculation) return;
-            const origin = document.getElementById("origin").value.trim();
-            const dest = document.getElementById("destination").value.trim();
-            
-            const message = `Olá! Segue a cotação da sua corrida:\n\n📍 *Embarque:* ${origin}\n🏁 *Destino:* ${dest}\n🛣️ *Distância:* ${lastCalculation.distanceText} (~${lastCalculation.timeText})\n💰 *Valor:* *R$ ${lastCalculation.formattedPrice}*\n\nPodemos confirmar?`;
-            
-            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
+            const message = `Olá! Segue a cotação da sua corrida:\n\n📍 *Embarque:* ${lastCalculation.startAddress}\n🏁 *Destino:* ${lastCalculation.endAddress}\n🛣️ *Distância:* ${lastCalculation.distanceText} (~${lastCalculation.timeText})\n💰 *Valor:* *R$ ${lastCalculation.formattedPrice}*\n\nPodemos confirmar?`;
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
         }
     </script>
 </body>
