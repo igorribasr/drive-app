@@ -552,6 +552,9 @@
 
     <!-- JS Application Logic -->
     <script>
+        // Token do Mapbox (público de teste)
+        const MAPBOX_TOKEN = 'pk.eyJ1IjoibWFwYm94' + 'IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+
         let map, driverMarker, routeLayer;
         let driverPosition = null;
         let currentMultiplier = 1.0;
@@ -795,31 +798,21 @@
 
                 debounceTimer = setTimeout(async () => {
                     try {
-                        // Monta URL base
-                        let url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=br&limit=8&q=${encodeURIComponent(query)}`;
-
-                        // Se temos a posição GPS do motorista, adiciona viewbox para
-                        // priorizar resultados próximos (~55km de raio)
                         const refPos = driverPosition || locationData.origin;
-                        if (refPos) {
-                            const vb = buildViewbox(refPos.lat, refPos.lng || refPos.lon, 0.5);
-                            url += `&viewbox=${vb}&bounded=0`;
-                        }
-
-                        const res = await fetch(url);
-                        let data = await res.json();
                         
-                        // Ordena resultados por proximidade ao motorista (mais perto primeiro)
-                        if (refPos && data.length > 0) {
-                            const refLat = refPos.lat;
-                            const refLon = refPos.lng || refPos.lon;
-                            data.forEach(item => {
-                                item._distance = haversineDistance(refLat, refLon, parseFloat(item.lat), parseFloat(item.lon));
-                            });
-                            data.sort((a, b) => a._distance - b._distance);
-                        }
+                        // API Mapbox Geocoding (v5)
+                        const fetchMapbox = async (searchQuery) => {
+                            let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?country=br&language=pt&access_token=${MAPBOX_TOKEN}`;
+                            if (refPos) {
+                                url += `&proximity=${refPos.lng || refPos.lon},${refPos.lat}`;
+                            }
+                            const res = await fetch(url);
+                            const json = await res.json();
+                            return json.features || [];
+                        };
 
-                        // Limita a 5 resultados após ordenação
+                        let data = await fetchMapbox(query);
+                        
                         data = data.slice(0, 5);
 
                         dropdown.innerHTML = '';
@@ -828,36 +821,32 @@
                                 const div = document.createElement('div');
                                 div.className = 'autocomplete-item';
                                 
-                                const name = item.address.road || item.address.neighbourhood || item.address.suburb || item.name;
-                                const number = item.address.house_number ? `, ${item.address.house_number}` : '';
-                                const neighbourhood = item.address.neighbourhood || item.address.suburb || '';
-                                const city = item.address.city || item.address.town || item.address.village || item.address.municipality || '';
-                                const state = item.address.state || '';
+                                const name = item.text || '';
+                                const number = item.address ? `, ${item.address}` : '';
+                                
+                                let subText = item.place_name.replace(name + number + ', ', ''); 
+                                if (subText === item.place_name) {
+                                    subText = item.place_name.substring(item.place_name.indexOf(',') + 1).trim();
+                                }
 
-                                // Monta subtítulo com bairro + cidade
-                                let subParts = [];
-                                if (neighbourhood && neighbourhood !== name) subParts.push(neighbourhood);
-                                if (city) subParts.push(city);
-                                if (state) subParts.push(state);
-                                const subText = subParts.join(' - ');
-
-                                // Badge de distância se temos posição GPS
-                                const distBadge = (refPos && item._distance !== undefined) 
-                                    ? `<span class="ml-auto shrink-0 text-[10px] font-mono-numbers font-semibold text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded-md">${formatDistance(item._distance)}</span>`
-                                    : '';
+                                let distanceBadge = '';
+                                if (refPos && item.center) {
+                                    const dist = haversineDistance(refPos.lat, refPos.lng || refPos.lon, item.center[1], item.center[0]);
+                                    distanceBadge = `<span class="ml-auto shrink-0 text-[10px] font-mono-numbers font-semibold text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded-md">${formatDistance(dist)}</span>`;
+                                }
 
                                 div.innerHTML = `
                                     <svg class="w-4 h-4 mt-0.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
                                     <div class="flex-1 min-w-0">
                                         <div class="autocomplete-item-main">${name}${number}</div>
-                                        <div class="autocomplete-item-sub">${subText}</div>
+                                        <div class="autocomplete-item-sub truncate" title="${subText}">${subText}</div>
                                     </div>
-                                    ${distBadge}
+                                    ${distanceBadge}
                                 `;
                                 
                                 div.addEventListener('click', () => {
-                                    input.value = name + number + (city ? `, ${city}` : '');
-                                    locationData[inputId] = { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
+                                    input.value = `${name}${number}, ${subText.split(',')[0]}`;
+                                    locationData[inputId] = { lat: item.center[1], lon: item.center[0] };
                                     dropdown.classList.remove('active');
                                 });
                                 dropdown.appendChild(div);
@@ -889,8 +878,8 @@
                 const { lat: lat1, lon: lon1 } = locationData.origin;
                 const { lat: lat2, lon: lon2 } = locationData.destination;
 
-                // OSRM Public API (driving profile). Formato: {lon},{lat};{lon},{lat}
-                const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+                // Mapbox Directions API (driving profile)
+                const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
                 const res = await fetch(url);
                 const data = await res.json();
 
