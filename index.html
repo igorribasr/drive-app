@@ -436,6 +436,22 @@
                                 Enviar Cliente
                             </button>
                         </div>
+                        
+                        <!-- Waze Navigation Bar -->
+                        <div class="w-full grid grid-cols-2 gap-2 mt-2" id="wazeNavContainer">
+                            <button onclick="openWaze('pickup')" class="py-2.5 px-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-[11px] font-bold flex items-center justify-center gap-1.5 border border-blue-500/30 transition-all active:scale-95 touch-target">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12.016 0C5.39 0 0 5.281 0 11.782c0 2.223.633 4.359 1.816 6.223L.105 22.95a.862.862 0 001.078 1.078l4.945-1.711a12.091 12.091 0 006.223 1.816C18.61 24.133 24 18.852 24 12.352 24 5.852 18.61 0 12.016 0zm-5.672 14.543a1.441 1.441 0 110-2.883 1.441 1.441 0 010 2.883zm11.344 0a1.441 1.441 0 110-2.883 1.441 1.441 0 010 2.883zm-5.672 2.836c-2.344 0-4.477-.914-6.047-2.484a.86.86 0 011.219-1.219c1.242 1.242 2.953 1.984 4.828 1.984 1.875 0 3.586-.742 4.828-1.984a.86.86 0 111.219 1.219c-1.57 1.57-3.703 2.484-6.047 2.484z"/>
+                                </svg>
+                                Waze: Embarque
+                            </button>
+                            <button onclick="openWaze('destination')" class="py-2.5 px-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-[11px] font-bold flex items-center justify-center gap-1.5 border border-blue-500/30 transition-all active:scale-95 touch-target">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12.016 0C5.39 0 0 5.281 0 11.782c0 2.223.633 4.359 1.816 6.223L.105 22.95a.862.862 0 001.078 1.078l4.945-1.711a12.091 12.091 0 006.223 1.816C18.61 24.133 24 18.852 24 12.352 24 5.852 18.61 0 12.016 0zm-5.672 14.543a1.441 1.441 0 110-2.883 1.441 1.441 0 010 2.883zm11.344 0a1.441 1.441 0 110-2.883 1.441 1.441 0 010 2.883zm-5.672 2.836c-2.344 0-4.477-.914-6.047-2.484a.86.86 0 011.219-1.219c1.242 1.242 2.953 1.984 4.828 1.984 1.875 0 3.586-.742 4.828-1.984a.86.86 0 111.219 1.219c-1.57 1.57-3.703 2.484-6.047 2.484z"/>
+                                </svg>
+                                Waze: Destino
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1006,6 +1022,24 @@
                 label.innerText = "Copiado! ✓";
                 setTimeout(() => { label.innerText = original; }, 2000);
             });
+        }
+
+        function openWaze(type) {
+            if (!locationData.origin || !locationData.destination) return;
+            
+            let lat, lon;
+            if (type === 'pickup') {
+                lat = locationData.origin.lat;
+                lon = locationData.origin.lon;
+            } else if (type === 'destination') {
+                lat = locationData.destination.lat;
+                lon = locationData.destination.lon;
+            }
+            
+            if (lat && lon) {
+                const url = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`;
+                window.open(url, '_blank');
+            }
         }
 
         function shareWhatsAppQuote() {
