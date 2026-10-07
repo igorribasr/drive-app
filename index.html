@@ -662,8 +662,9 @@
                 attributionControl: false
             }).setView([-23.55052, -46.633308], 14);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`, {
                 maxZoom: 19,
+                attribution: '© Mapbox'
             }).addTo(map);
 
             trackDriverLocation();
