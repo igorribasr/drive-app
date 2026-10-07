@@ -526,6 +526,14 @@
                         <input type="number" id="minFare" value="8.00" step="1.00" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
                     </div>
                 </div>
+
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
+                    <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Combustível / Desloc. (R$/km)</label>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-amber-400">R$</span>
+                        <input type="number" id="priceDisplacement" value="0.50" step="0.10" class="w-full bg-transparent font-mono-numbers font-bold text-white text-base focus:outline-none">
+                    </div>
+                </div>
             </div>
 
             <!-- Presets rápidos -->
@@ -581,11 +589,14 @@
                 document.getElementById('pricePerKm').value = saved.pricePerKm;
                 document.getElementById('pricePerMin').value = saved.pricePerMin;
                 document.getElementById('minFare').value = saved.minFare;
+                if (saved.priceDisplacement !== undefined) {
+                    document.getElementById('priceDisplacement').value = saved.priceDisplacement;
+                }
             }
         }
 
-        function saveSettings(baseFare, pricePerKm, pricePerMin, minFare) {
-            localStorage.setItem('drivePilotSettings', JSON.stringify({ baseFare, pricePerKm, pricePerMin, minFare }));
+        function saveSettings(baseFare, pricePerKm, pricePerMin, minFare, priceDisplacement) {
+            localStorage.setItem('drivePilotSettings', JSON.stringify({ baseFare, pricePerKm, pricePerMin, minFare, priceDisplacement }));
             updateRateSummaryBadge();
         }
 
@@ -608,12 +619,13 @@
             const pricePerKm = parseFloat(document.getElementById('pricePerKm').value) || 0;
             const pricePerMin = parseFloat(document.getElementById('pricePerMin').value) || 0;
             const minFare = parseFloat(document.getElementById('minFare').value) || 0;
+            const priceDisplacement = parseFloat(document.getElementById('priceDisplacement').value) || 0;
 
-            saveSettings(baseFare, pricePerKm, pricePerMin, minFare);
+            saveSettings(baseFare, pricePerKm, pricePerMin, minFare, priceDisplacement);
             toggleConfigModal(false);
 
             if (lastCalculation) {
-                calculateFare(lastCalculation.distanceKm, lastCalculation.timeMin);
+                calculateFare(lastCalculation.distanceKm, lastCalculation.timeMin, lastCalculation.dispDistKm || 0);
             }
         }
 
@@ -879,15 +891,38 @@
                 const { lat: lat1, lon: lon1 } = locationData.origin;
                 const { lat: lat2, lon: lon2 } = locationData.destination;
 
-                // Mapbox Directions API (driving profile)
-                const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+                const isOriginMyLoc = document.getElementById("origin").value === "Minha Localização Atual";
+                let url;
+                let isThreePointRoute = false;
+
+                if (driverPosition && !isOriginMyLoc) {
+                    isThreePointRoute = true;
+                    const { lat: dLat, lng: dLon } = driverPosition;
+                    url = `https://api.mapbox.com/directions/v5/mapbox/driving/${dLon},${dLat};${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+                } else {
+                    url = `https://api.mapbox.com/directions/v5/mapbox/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+                }
+
                 const res = await fetch(url);
                 const data = await res.json();
 
                 if (data.code === 'Ok' && data.routes.length > 0) {
                     const route = data.routes[0];
-                    const distanceKm = route.distance / 1000;
-                    const timeMin = Math.ceil(route.duration / 60);
+                    let dispDistKm = 0;
+                    let tripDistKm = 0;
+                    let tripTimeMin = 0;
+
+                    if (isThreePointRoute && route.legs && route.legs.length === 2) {
+                        dispDistKm = route.legs[0].distance / 1000;
+                        tripDistKm = route.legs[1].distance / 1000;
+                        tripTimeMin = Math.ceil(route.legs[1].duration / 60);
+                    } else if (route.legs && route.legs.length > 0) {
+                        tripDistKm = route.legs[0].distance / 1000;
+                        tripTimeMin = Math.ceil(route.legs[0].duration / 60);
+                    } else {
+                        tripDistKm = route.distance / 1000;
+                        tripTimeMin = Math.ceil(route.duration / 60);
+                    }
 
                     // Desenhar Rota no Mapa
                     if (routeLayer) map.removeLayer(routeLayer);
@@ -899,10 +934,11 @@
                     map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
 
                     lastCalculation = {
-                        distanceKm,
-                        timeMin,
-                        distanceText: distanceKm.toFixed(1) + ' km',
-                        timeText: timeMin + ' min',
+                        distanceKm: tripDistKm,
+                        timeMin: tripTimeMin,
+                        dispDistKm: dispDistKm,
+                        distanceText: tripDistKm.toFixed(1) + ' km',
+                        timeText: tripTimeMin + ' min',
                         startAddress: document.getElementById('origin').value,
                         endAddress: document.getElementById('destination').value
                     };
@@ -911,7 +947,7 @@
                     document.getElementById("timeInfo").innerText = lastCalculation.timeText;
                     document.getElementById("badgeMultApplied").innerText = `${currentMultiplier.toFixed(2)}x`;
 
-                    calculateFare(distanceKm, timeMin);
+                    calculateFare(tripDistKm, tripTimeMin, dispDistKm);
 
                     const resultEl = document.getElementById('resultContainer');
                     resultEl.classList.remove('hidden');
@@ -927,13 +963,15 @@
             }
         }
 
-        function calculateFare(distanceKm, timeMin) {
+        function calculateFare(distanceKm, timeMin, dispDistKm = 0) {
             const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
             const pricePerKm = parseFloat(document.getElementById('pricePerKm').value) || 0;
             const pricePerMin = parseFloat(document.getElementById('pricePerMin').value) || 0;
             const minFare = parseFloat(document.getElementById('minFare').value) || 0;
+            const priceDisplacement = parseFloat(document.getElementById('priceDisplacement').value) || 0;
 
-            let subtotal = baseFare + (distanceKm * pricePerKm) + (timeMin * pricePerMin);
+            const dispCost = dispDistKm * priceDisplacement;
+            let subtotal = baseFare + (distanceKm * pricePerKm) + (timeMin * pricePerMin) + dispCost;
             let total = subtotal * currentMultiplier;
 
             let isMinimum = false;
@@ -948,9 +986,13 @@
             if (isMinimum) {
                 document.getElementById('fareBreakdown').innerText = `Tarifa mínima aplicada (R$ ${minFare.toFixed(2).replace('.', ',')})`;
             } else if (currentMultiplier > 1.0) {
-                document.getElementById('fareBreakdown').innerText = `Base: R$ ${subtotal.toFixed(2).replace('.', ',')} + Ajuste ${currentMultiplierDesc}`;
+                let text = `Base: R$ ${subtotal.toFixed(2).replace('.', ',')} + Ajuste ${currentMultiplierDesc}`;
+                if (dispDistKm > 0) text += ` (Inc. desloc.)`;
+                document.getElementById('fareBreakdown').innerText = text;
             } else {
-                document.getElementById('fareBreakdown').innerText = `Base: R$ ${baseFare.toFixed(2)} + ${distanceKm.toFixed(1)}km + ${timeMin}min`;
+                let text = `Base: R$ ${baseFare.toFixed(2)} + ${distanceKm.toFixed(1)}km + ${timeMin}min`;
+                if (dispDistKm > 0) text += ` + ${dispDistKm.toFixed(1)}km (Desloc.)`;
+                document.getElementById('fareBreakdown').innerText = text;
             }
 
             lastCalculation.formattedPrice = formattedTotal;
